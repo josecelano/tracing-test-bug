@@ -1,7 +1,6 @@
-use std::thread;
 use tracing::{info, level_filters::LevelFilter};
 
-pub fn run(init_subscriber: bool) {
+pub async fn run(init_subscriber: bool) {
     if init_subscriber {
         tracing_subscriber::fmt()
             .with_max_level(LevelFilter::TRACE)
@@ -11,17 +10,21 @@ pub fn run(init_subscriber: bool) {
 
     info!("level 1");
 
-    let handle_1 = thread::spawn(move || {
+    let future1 = async move {
         info!("level 2");
 
-        let handle_2 = thread::spawn(move || {
+        let future2 = async move {
             info!("level 3");
-        });
+        };
 
-        handle_2.join().unwrap();
-    });
+        let handle_3 = tokio::spawn(future2);
 
-    handle_1.join().unwrap();
+        handle_3.await.unwrap();
+    };
+
+    let handle_1 = tokio::spawn(future1);
+
+    handle_1.await.unwrap();
 }
 
 #[cfg(test)]
@@ -33,30 +36,17 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_logs_are_captured_with_tokio() {
-        tokio::spawn(async {
-            let init_subscriber = false;
-            app::run(init_subscriber);
-        })
-        .await
-        .unwrap();
+        tokio::spawn(app_run_without_initializing_tracing())
+            .await
+            .unwrap();
 
         assert!(logs_contain("level 1"));
-        assert!(!logs_contain("level 2"));
-        assert!(!logs_contain("level 3"));
+        assert!(logs_contain("level 2"));
+        assert!(logs_contain("level 3"));
     }
 
-    #[tokio::test]
-    #[traced_test]
-    async fn test_logs_are_not_captured_with_tokio_spawn_blocking() {
-        tokio::task::spawn_blocking(move || {
-            let init_subscriber = false;
-            app::run(init_subscriber);
-        })
-        .await
-        .unwrap();
-
-        assert!(!logs_contain("level 1"));
-        assert!(!logs_contain("level 2"));
-        assert!(!logs_contain("level 3"));
+    async fn app_run_without_initializing_tracing() {
+        let init_subscriber = false;
+        app::run(init_subscriber).await;
     }
 }
