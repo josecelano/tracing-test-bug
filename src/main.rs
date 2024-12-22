@@ -1,6 +1,7 @@
 use tracing_test_bug::app;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let init_subscriber = true;
-    app::run(init_subscriber)
+    app::run(init_subscriber).await;
 }
